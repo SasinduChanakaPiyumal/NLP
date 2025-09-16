@@ -12,6 +12,8 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
+import os
+import sys
 
 
 # ## Loading data
@@ -19,8 +21,25 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 # In[3]:
 
 
-df = pd.read_excel('C:\\Users\\Maclan\\OneDrive\\Desktop\\Score.xlsx')
-df.head()
+# Configuration: Use environment variable or default path
+excel_file_path = os.getenv('SCHOLAR_DATA_FILE', 'Score.xlsx')
+
+try:
+    df = pd.read_excel(excel_file_path)
+    print(f"Successfully loaded data from {excel_file_path}")
+    df.head()
+except FileNotFoundError:
+    print(f"Error: File '{excel_file_path}' not found.")
+    print("Please ensure the file exists or set the SCHOLAR_DATA_FILE environment variable.")
+    sys.exit(1)
+except PermissionError:
+    print(f"Error: Permission denied when accessing '{excel_file_path}'.")
+    print("Please check file permissions.")
+    sys.exit(1)
+except Exception as e:
+    print(f"Error reading Excel file '{excel_file_path}': {str(e)}")
+    print("Please check that the file is a valid Excel file and not corrupted.")
+    sys.exit(1)
 
 
 # In[4]:
@@ -61,27 +80,78 @@ texts
 
 # In[10]:
 
+# Ensure required NLTK resources are available
+def ensure_nltk_resources():
+    """Download required NLTK resources if not available."""
+    resources = [
+        ('punkt', 'tokenizers/punkt'),
+        ('stopwords', 'corpora/stopwords'),
+        ('wordnet', 'corpora/wordnet')
+    ]
+    
+    for name, path in resources:
+        try:
+            nltk.data.find(path)
+        except LookupError:
+            print(f"Downloading NLTK resource: {name}")
+            try:
+                nltk.download(name, quiet=True)
+            except Exception as e:
+                print(f"Error downloading NLTK resource '{name}': {str(e)}")
+                print("Please check your internet connection or download manually.")
+                sys.exit(1)
+
+# Ensure NLTK resources are available before using them
+ensure_nltk_resources()
 
 def preprocess_text(text):
-    # 1. Lowercasing
-    text = text.lower()
+    """
+    Preprocess text data by cleaning, tokenizing, removing stopwords, and lemmatizing.
     
-    # 2. Removing non-alphanumeric characters (keeping spaces and letters only)
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    Args:
+        text (str): Input text to preprocess
+        
+    Returns:
+        str: Preprocessed text
+        
+    Raises:
+        ValueError: If text is None or empty
+        LookupError: If required NLTK resources are not available
+    """
+    if text is None or not isinstance(text, str):
+        raise ValueError("Input text must be a non-empty string")
     
-    # 3. Tokenization (splitting text into words)
-    words = nltk.word_tokenize(text)
+    if not text.strip():
+        return ""
     
-    # 4. Remove stopwords
-    stop_words = set(stopwords.words('english'))
-    words = [word for word in words if word not in stop_words]
+    try:
+        # 1. Lowercasing
+        text = text.lower()
+        
+        # 2. Removing non-alphanumeric characters (keeping spaces and letters only)
+        text = re.sub(r'[^a-zA-Z\s]', '', text)
+        
+        # 3. Tokenization (splitting text into words)
+        words = nltk.word_tokenize(text)
+        
+        # 4. Remove stopwords
+        stop_words = set(stopwords.words('english'))
+        words = [word for word in words if word not in stop_words]
+        
+        # 5. Lemmatization (to reduce words to their base form)
+        lemmatizer = WordNetLemmatizer()
+        words = [lemmatizer.lemmatize(word) for word in words]
+        
+        # 6. Join words back into a string
+        return ' '.join(words)
     
-    # 5. Lemmatization (to reduce words to their base form)
-    lemmatizer = WordNetLemmatizer()
-    words = [lemmatizer.lemmatize(word) for word in words]
-    
-    # 6. Join words back into a string
-    return ' '.join(words)
+    except LookupError as e:
+        print(f"NLTK resource not found: {str(e)}")
+        print("Please ensure all required NLTK resources are installed.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error preprocessing text: {str(e)}")
+        return ""
 
 # Apply preprocessing to the text data
 preprocessed_texts = texts.apply(preprocess_text)
@@ -97,9 +167,9 @@ preprocessed_texts
 
 
 vectorizer = TfidfVectorizer(
-    max_df= 0.98,  # Ignore words that appear in more than 85% of documents
-    min_df=2,     # Ignore words that appear in less than 5 documents
-    ngram_range=(1, 2),  # Use unigrams
+    max_df=0.98,  # Ignore words that appear in more than 98% of documents
+    min_df=2,     # Ignore words that appear in fewer than 2 documents
+    ngram_range=(1, 2),  # Use unigrams and bigrams
     stop_words='english'  # Remove common English stopwords
 )
 
@@ -125,17 +195,33 @@ print("Features (Top 20):", vectorizer.get_feature_names_out()[:20])
 # In[16]:
 
 
-# Convert the matrix to a DataFrame
-tfidf_df = pd.DataFrame(X.toarray(), columns=vectorizer.get_feature_names_out())
+# Note: Avoiding conversion to dense array to preserve memory efficiency
+# For large datasets, working with the sparse matrix X directly is recommended
+# Only convert small portions to dense format when necessary for inspection
 
-# Display the top few rows of the TF-IDF DataFrame
-print(tfidf_df.head())
+# Display basic information about the sparse matrix
+print(f"TF-IDF Matrix shape: {X.shape}")
+print(f"Matrix sparsity: {(1 - X.nnz / (X.shape[0] * X.shape[1])):.4f}")
+print(f"Number of non-zero elements: {X.nnz}")
+
+# For demonstration, show a small sample (first 5 rows, first 10 features) as dense
+sample_size = min(5, X.shape[0])
+feature_sample_size = min(10, X.shape[1])
+feature_names = vectorizer.get_feature_names_out()
+
+print(f"\nSample TF-IDF values (first {sample_size} documents, first {feature_sample_size} features):")
+sample_df = pd.DataFrame(
+    X[:sample_size, :feature_sample_size].toarray(),
+    columns=feature_names[:feature_sample_size]
+)
+print(sample_df)
 
 
 # In[17]:
 
 
-tfidf_df.shape
+# Display shape of the sparse matrix instead of dense DataFrame
+print(f"TF-IDF Matrix shape: {X.shape}")
 
 
 # # Question 2
@@ -231,37 +317,39 @@ labels.shape
 # In[36]:
 
 
-from sklearn.decomposition import PCA
+from sklearn.decomposition import TruncatedSVD
 
 
 # In[37]:
 
 
-pca = PCA(n_components=2) 
-X_pca = pca.fit_transform(X.toarray())
+# Use TruncatedSVD instead of PCA to handle sparse matrices efficiently
+# TruncatedSVD works directly with sparse matrices without densification
+svd = TruncatedSVD(n_components=2, random_state=42)
+X_svd = svd.fit_transform(X)
 
 
 # In[38]:
 
 
-X_pca
+X_svd
 
 
 # In[39]:
 
 
-X_pca.shape
+X_svd.shape
 
 
 # In[40]:
 
 
-# Step 4: Plot the data points in 2D PCA space with clusters as colors
+# Step 4: Plot the data points in 2D SVD space with clusters as colors
 plt.figure(figsize=(8, 6))
-plt.scatter(X_pca[:, 0], X_pca[:, 1], c=kmeans.labels_, cmap='viridis', marker='o')
-plt.title("PCA of Clusters in 2D Space")
-plt.xlabel("Principal Component 1")
-plt.ylabel("Principal Component 2")
+plt.scatter(X_svd[:, 0], X_svd[:, 1], c=kmeans.labels_, cmap='viridis', marker='o')
+plt.title("TruncatedSVD of Clusters in 2D Space")
+plt.xlabel("SVD Component 1")
+plt.ylabel("SVD Component 2")
 plt.colorbar(label="Cluster")
 plt.show()
 
