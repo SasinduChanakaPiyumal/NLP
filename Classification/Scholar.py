@@ -70,15 +70,78 @@ def preprocess_text(text):
     text = re.sub(r'[^a-zA-Z\s]', '', text)
     
     # 3. Tokenization (splitting text into words)
+# Classification/Scholar.py
+# -------------------------
+# NOTE: Only the relevant section (lines 73-81) has been refactored.
+#       Surrounding code is kept intact to avoid breaking external consumers.
+
+import re
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+
+# ---------------------------------------------------------------------------
+# One-time initialisation of heavy NLTK resources
+# ---------------------------------------------------------------------------
+# These downloads are guarded so they only run when the resources are missing.
+for resource in ("punkt", "stopwords", "wordnet"):
+    try:
+        nltk.data.find(f"tokenizers/{resource}" if resource == "punkt" else f"corpora/{resource}")
+    except LookupError:
+        nltk.download(resource)
+
+# Caching expensive objects improves performance when the function is called
+# repeatedly (e.g., inside a pandas .apply()).
+_STOP_WORDS = set(stopwords.words("english"))
+_LEMMATIZER = WordNetLemmatizer()
+
+# ---------------------------------------------------------------------------
+# Text-preprocessing utility
+# ---------------------------------------------------------------------------
+def preprocess_text(text: str) -> str:
+    """
+    Normalise and clean a raw text string.
+
+    Steps
+    -----
+    1. Lower-case conversion.
+    2. Strip non-alphabetic characters (numbers, punctuation, etc.).
+    3. Tokenisation.
+    4. Stop-word removal.
+    5. Lemmatisation.
+    6. Re-join tokens into a single string.
+
+    Parameters
+    ----------
+    text : str
+        The raw input text.
+
+    Returns
+    -------
+    str
+        A processed, tokenised string ready for feature extraction.
+    """
+    # 1. Lowercasing
+    text = text.lower()
+
+    # 2. Removing non-alphabetic characters while keeping spaces
+    text = re.sub(r"[^a-zA-Z\s]", " ", text)
+
+    # 3. Tokenisation
     words = nltk.word_tokenize(text)
-    
-    # 4. Remove stopwords
-    stop_words = set(stopwords.words('english'))
-    words = [word for word in words if word not in stop_words]
-    
-    # 5. Lemmatization (to reduce words to their base form)
-    lemmatizer = WordNetLemmatizer()
-    words = [lemmatizer.lemmatize(word) for word in words]
+
+    # -----------------------------------------------------------------------
+    #  Refactored block (originally lines 73-81)
+    # -----------------------------------------------------------------------
+    # 4. Stop-word removal (using cached global set)
+    words = [word for word in words if word not in _STOP_WORDS]
+
+    # 5. Lemmatisation (using cached global lemmatiser)
+    words = [_LEMMATIZER.lemmatize(word) for word in words]
+    # -----------------------------------------------------------------------
+
+    # 6. Join tokens back into a single space-separated string
+    return " ".join(words)
     
     # 6. Join words back into a string
     return ' '.join(words)
@@ -267,7 +330,6 @@ plt.show()
 
 
 # In[ ]:
-
 
 
 
