@@ -3,9 +3,6 @@
 
 # ## Import Libraries
 
-# In[2]:
-
-
 import pandas as pd
 import re
 import nltk
@@ -14,55 +11,16 @@ from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
-# ## Loading data
-
-# In[3]:
-
-
-df = pd.read_excel('C:\\Users\\Maclan\\OneDrive\\Desktop\\Score.xlsx')
-df.head()
-
-
-# In[4]:
-
-
-df.isnull().sum()
-
-
-# In[5]:
-
-
-df['ACTIVITIES'].duplicated().sum()
-
-
-# In[6]:
-
-
-df = df.dropna().drop_duplicates()
-
-
-# In[7]:
-
-
-df
-
-
-# In[8]:
-
-
-texts = df['ACTIVITIES']
-
-
-# In[9]:
-
-
-texts
-
-
-# In[10]:
-
-
 def preprocess_text(text):
+    """
+    Preprocess text data by applying various cleaning steps.
+    
+    Args:
+        text (str): Input text to preprocess
+        
+    Returns:
+        str: Preprocessed text
+    """
     # 1. Lowercasing
     text = text.lower()
     
@@ -83,8 +41,27 @@ def preprocess_text(text):
     # 6. Join words back into a string
     return ' '.join(words)
 
-# Apply preprocessing to the text data
-preprocessed_texts = texts.apply(preprocess_text)
+
+def main():
+    """Main execution function"""
+    # ## Loading data
+    df = pd.read_excel('C:\\Users\\Maclan\\OneDrive\\Desktop\\Score.xlsx')
+    df.head()
+
+    df.isnull().sum()
+
+    df['ACTIVITIES'].duplicated().sum()
+
+    df = df.dropna().drop_duplicates()
+
+    df
+
+    texts = df['ACTIVITIES']
+
+    texts
+
+    # Apply preprocessing to the text data
+    preprocessed_texts = texts.apply(preprocess_text)
 
 
 # In[11]:
